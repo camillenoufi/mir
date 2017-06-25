@@ -1,0 +1,96 @@
+function [ confusionMatrixMean, confusionMatrixStd ] = classifierSVM( songStruct,distanceMatrix )
+
+    %use 'cell' data type to hold info (different from K_Cluster)
+
+    % constants
+    genreNames = [string('classical'),string('electronic'),string('jazz'),string('punk'),string('rock'),string('world')];
+    numGenres = numel(genreNames);
+    numSongs = 25;
+    totalSongs = numGenres * numSongs;
+    fs = 22050;
+    fftSize = 512;
+    
+    kFold = 10; % 10 total loops
+    subSize = 5; % 5 songs in subset
+    kNearest = 5; % 5 nearest neighbors
+    
+    % get song list starting with classical
+    songList = strings(1, totalSongs);
+    for i = 1:totalSongs
+        songList(i) = songStruct(i).index;
+    end
+    
+    % confusion matrix size
+    confusionMatrix = zeros(numGenres, numGenres, kFold);
+    
+    % create list of class types (genre possibility of each song)
+    classTypes = cell(150,1);
+    for i= 1:totalSongs
+        if (i > 0 && i <= 25)        
+            classTypes(i) = cellstr('classical');
+        elseif (i > 25 && i <= 50)   
+            classTypes(i) = cellstr('electronic');
+        elseif (i > 5 && i <= 75)   
+            classTypes(i) = cellstr('jazz');
+        elseif ( i > 75 && i <= 100)  
+            classTypes(i) = cellstr('punk');
+        elseif ( i > 100 && i <= 125) 
+            classTypes(i) = cellstr('rock');
+        elseif (i > 125 && i <= 150)
+            classTypes(i) = cellstr('world');
+        end        
+    end
+    
+    for m = 1:kFold
+        for n = 1:subSize
+            
+            % space for indices
+            indicesTraining = zeros(1,totalSongs*(subSize-1)/subSize);
+            indicesTest = zeros(1, totalSongs/subSize);
+            
+            % get 20 training songs and 5 test songs
+            for i = 0:numGenres-1
+                indicesTemp = randperm(numSongs) + i*numSongs;
+                indicesTestTemp = indicesTemp(1:subSize);
+                indicesTrainingTemp = indicesTemp(subSize+1:numSongs);
+                
+                indicesTest(i*testSub+1:i*subSize+subSize) = indicesTestTemp;
+                indicesTraining(i*(numSongs-subSize)+1:i*(numSongs-subSize)+(numSongs-subSize)) = indicesTrainingTemp;
+            end                       
+        
+            % make SVM multiclass model using ECOC (bc SVM can only do 2
+            % seperations at a time and we have to categorize 6
+            modelSVM = fitcecoc(distanceMatrix(indicesTraining,:),classTypes(indicesTraining));
+            
+            % for every test array      
+            for i = 1:totalSongs / subSize
+                testIndex = indicesTest(i);           
+                %label = predict(modelSVM,dmx(indexTest,indicesTraining));
+                genre = predict(modelSVM,distanceMatrix(testIndex,:));
+                if (string(genre) == 'classical')
+                    l = 1;
+                elseif (string(genre) == 'electronic')
+                    l = 2;
+                elseif (string(genre) == 'jazz')
+                    l = 3;
+                elseif (string(genre) == 'punk')
+                    l = 4;                
+                elseif (string(genre) == 'rock')
+                    l = 5;
+                else %world
+                    l = 6;
+                end
+                
+                %put result into confusion matrix and sum w prior value
+                confusionMatrix(ceil(i/subSize), l, m) = confusionMatrix(ceil(i/subSize), l, m) + 1;
+                                    
+            end
+            
+        end
+    end
+    
+    confusionMatrixMean = mean(confusionMatrix,3);
+    confusionMatrixStd = std(confusionMatrix,0,3);
+
+end
+
